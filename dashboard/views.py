@@ -1,35 +1,21 @@
-from django.db.models import F, Count, OuterRef, Subquery, Sum
-from django.db.models.functions import ExtractMonth, ExtractYear
-from django.forms import model_to_dict
-from django.shortcuts import render
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from dashboard.models import Customers, OrderDetails
 from dashboard.serializers import DashBoardSerializer
+from .services import *
 
 
 class DashBoard(APIView):
     def get(self, request):
         info = {}
-        customers_count = Customers.objects.count()
-        current_year_sales_revenue = (
-            OrderDetails.objects.select_related("order")
-            .filter(order__order_date__year=1997)
-            .annotate(year=ExtractYear("order__order_date"))
-            .annotate(month=ExtractMonth("order__order_date"))
-            .values("year", "month")
-            .annotate(month_total_price=Sum(F("unit_price") * F("quantity")))
-            .order_by("year", "month")
-        )
-
-        data = OrderDetails.objects.aggregate(
-            number_of_sales=Count("*"),
-            total_revenue=Sum(F("unit_price") * F("quantity")),
-        )
-        info["number_of_sales"] = data["number_of_sales"]
-        info["total_revenue"] = round(data["total_revenue"], 2)
+        customers_count = get_customers_count()
+        current_year_sales_revenue = get_current_year_sales_revenue()
+        number_or_sales, total_revenue = get_number_of_sales_and_total_revenue()
+        sales_by_region = get_sales_by_region()
+        info["number_of_sales"] = number_or_sales
+        info["total_revenue"] = round(total_revenue, 2)
         info["total_customers"] = customers_count
         info["current_year_sales_revenue"] = list(current_year_sales_revenue)
+        info["sales_by_region"] = sales_by_region
         serializer = DashBoardSerializer(data=info)
         serializer.is_valid(raise_exception=True)
         return Response(serializer.validated_data)
